@@ -6,7 +6,7 @@ from costum_queue import MESSAGE_QUEUE
 from urllib.parse import urljoin
 from typing import Dict
 import re
-import aiofile
+import aiofiles
 
 
 # http://guba.eastmoney.com/list,zssh000001,f_7.html
@@ -19,11 +19,14 @@ async def request_list_page(session: ClientSession, url: str) -> None:
         element = etree.HTML(html)
         articles = element.xpath("//div[contains(@class, 'articleh')]")
         for article in articles:
-            item = dict()
-            item['title'] = article.xpath("./span[3]/a/text()")[0]
-            item['author'] = article.xpath('./span[4]/a/font/text()')[0]
-            item['url'] = urljoin(url, article.xpath('./span[3]/a/@href')[0])
-            await request_detail_page(session, item)
+            try:
+                item = dict()
+                item['title'] = article.xpath("./span[3]/a/text()")[0]
+                item['author'] = article.xpath('./span[4]/a/font/text()')[0]
+                item['url'] = urljoin(url, article.xpath('./span[3]/a/@href')[0])
+                await request_detail_page(session, item)
+            except Exception as e:
+                print(e)
 
 
 async def request_detail_page(session: ClientSession, msg: Dict) -> None:
@@ -37,14 +40,14 @@ async def request_detail_page(session: ClientSession, msg: Dict) -> None:
 
 
 async def save_to_csv() -> None:
-    async with aiofile.async_open('./data.csv', mode="a", encoding="uft8") as f:
+    async with aiofiles.open('data.csv', mode="a", encoding="utf8") as f:
         for msg in MESSAGE_QUEUE:
             await f.write(f"{msg['title']},{msg['author']},{msg['time']}\n")
 
 
 async def main():
     async with aiohttp.TCPConnector(
-            limit=100,
+            limit=200,
             force_close=True,
             enable_cleanup_closed=True,
     ) as tc:
@@ -54,10 +57,11 @@ async def main():
                 task = (asyncio.ensure_future(request_list_page(
                     session=session,
                     url=f"http://guba.eastmoney.com/list,zssh000001,f_{i}.html"
-                )) for i in range(i, i + 50))
-                i += 50
+                )) for i in range(i, i + 20))
+                i += 20
                 await asyncio.gather(*task)
-            await save_to_csv()
+                await save_to_csv()
+                print(i)
 
 
 if __name__ == '__main__':
